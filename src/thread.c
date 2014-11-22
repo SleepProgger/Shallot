@@ -24,11 +24,11 @@
 #include <openssl/rsa.h>
 #include <openssl/sha.h>
 
-void *worker(void *params) { // life cycle of a cracking pthread
+void *worker(void *params_p) { // life cycle of a cracking pthread
+  struct worker_param_t *params = params_p;
   uint64_t e_be; // storage for our "big-endian" version of e
   uint8_t buf[SHA1_DIGEST_LEN],
-          der[RSA_EXP_DER_LEN + 1], // TODO: is the size of this right?
-          optimum = *(uint8_t*)params;
+          der[RSA_EXP_DER_LEN + 1]; // TODO: is the size of this right?
   char onion[BASE32_ONIONLEN + 1];
   SHA_CTX hash, copy;
   RSA *rsa;
@@ -40,15 +40,14 @@ void *worker(void *params) { // life cycle of a cracking pthread
   uint8_t *ptr = der_c;
   size_t der_len;
 #endif
-
-  if(regcomp(regex, regex_str, REG_EXTENDED | REG_NOSUB)) // yes, this is redundant, but meh
+  if(regcomp(regex, globals.regex_str, REG_EXTENDED | REG_NOSUB)) // yes, this is redundant, but meh
     error(X_REGEX_COMPILE);
 
-  while(!found) {
+  while(!globals.found) {
     // keys are only generated every so often
     // every 549,755,781,120 tries by default
 
-    if(optimum)
+    if(params->optimum)
       rsa = easygen(RSA_OPTM_BITLEN - RSA_PK_E_LENGTH * 8, RSA_PK_E_LENGTH,
                     der, RSA_OPT_DER_LEN, &hash);
     else
@@ -67,7 +66,7 @@ void *worker(void *params) { // life cycle of a cracking pthread
 
     uint8_t *e_ptr = ((uint8_t*)&e_be) + 8 - e_bytes;
 
-    while((e <= elim) && !found) { // main loop
+    while((e <= globals.elim) && !globals.found) { // main loop
       // copy the relevant parts of our already set up context
       memcpy(&copy, &hash, SHA_REL_CTX_LEN); // 40 bytes here...
       copy.num = hash.num;                   // and don't forget the num (9)
@@ -83,49 +82,63 @@ void *worker(void *params) { // life cycle of a cracking pthread
 
       lloop++;                   // keep track of our tries...
       if (lloop == 10000) { // to minimize the waiting for the mutex
-        pthread_mutex_lock(&count_mutex);
-        loop += lloop;
-        pthread_mutex_unlock(&count_mutex);
+        pthread_mutex_lock(&globals.count_mutex);
+        globals.loop += lloop;
+        pthread_mutex_unlock(&globals.count_mutex);
         lloop = 0;
       }
 
       if(!regexec(regex, onion, 0, 0, 0)) { // check for a match
 
-        // let our main thread know on which thread to wait
-        lucky_thread = pthread_self();
-        found = 1; // kill off our other threads, asynchronously
 
-        if(monitor)
+        if(globals.monitor)
           printf("\n"); // keep our printing pretty!
 
+        //BIGNUM *oldE = BN_dup(rsa->e);
         if(!BN_bin2bn(e_ptr, e_bytes, rsa->e)) // store our e in the actual key
           error(X_BIGNUM_FAILED);              // and make sure it got there
 
-        if(!sane_key(rsa))        // check our key
-          error(X_YOURE_UNLUCKY); // bad key :(
+        if(!sane_key(rsa)){        // check our key
+          if(globals.verbose > 0) fprintf(stderr, "\nERROR: You happened to find a bad key - congrats.\n");;
+          break;
+          //error(X_YOURE_UNLUCKY); // bad key :(
+        }
 
 #ifdef RECHECK_HASH
-          // Create the (unencoded) onion address from a fresh exported public key,
-          // and test it against out calculated one. Otherwise this tool produce wrong keys (rare).
-          // (Try code or caaa as test search pattern.)
-          der_len = i2d_RSAPublicKey(rsa, &ptr);
-          SHA1_Init(&copy);
-          SHA1_Update(&copy, der_c, der_len);
-          SHA1_Final(buf_c, &copy);
-          if (memcmp(buf, buf_c, 10) != 0) {
-            //RSA_free(rsa); // free up what's left (wtf ? why does this crash ? it should be freed ?!)
-            //base32_encode(onion_, 16, buf, 10);
-            fprintf(stderr, "\nInvalid key found %s. Skip this key.\n", onion);
-            break;
-          }
+        // Create the (unencoded) onion address from a fresh exported public key,
+        // and test it against out calculated one. Otherwise this tool produce wrong keys (rare).
+        // (Try ^code or ^caaa as test search pattern.)
+        ptr = der_c;
+        der_len = i2d_RSAPublicKey(rsa, &ptr);
+        SHA1_Init(&copy);
+        SHA1_Update(&copy, der_c, der_len);
+        SHA1_Final(buf_c, &copy);
+        if (memcmp(buf, buf_c, 10) != 0) {
+          //RSA_free(rsa); // free up what's left (wtf ? why does this crash ? it should be freed ?!)
+          //base32_encode(onion_, 16, buf, 10);
+          if(globals.verbose > 0) fprintf(stderr, "\nInvalid key found %s. Skip this key.\n", onion);
+          //TDODO: print failed key to stderr if verbose > 1
+          break;
+        }
 #endif
-
+        pthread_mutex_lock(&globals.print_mutex);
         print_onion(onion); // print our domain
         print_prkey(rsa);   // and more importantly the key
+        pthread_mutex_unlock(&globals.print_mutex);
 
-        RSA_free(rsa); // free up what's left
-
-        return 0;
+        if(!params->keep_running){
+          // let our main thread know on which thread to wait
+          globals.lucky_thread = pthread_self();
+          globals.found = 1; // kill off our other threads, asynchronously
+          RSA_free(rsa); // free up what's left
+          return 0;
+        }
+        //BN_copy(oldE, rsa->e);
+        // We should be able to continue, but some call seem to change the der/rsa or e data.
+        // Copying back the old rsa->e didn'T help. TODO: <-
+        // So for now we just create a new rsa key and start fresh.
+        globals.hits++;
+        break;
       }
 
       e += 2; // do *** NOT *** forget this!
@@ -135,7 +148,7 @@ void *worker(void *params) { // life cycle of a cracking pthread
         e_byte_thresh <<= ++e_bytes * 8;
         e_byte_thresh++;
 
-        if(optimum) {
+        if(params->optimum) {
           RSA_free(rsa);
           easygen(RSA_OPTM_BITLEN - e_bytes * 8, e_bytes, der, RSA_OPT_DER_LEN,
                   &hash);
@@ -161,10 +174,11 @@ void *worker(void *params) { // life cycle of a cracking pthread
   return 0;
 }
 
-void *monitor_proc(void *unused) {
+void *monitor_proc(void *params_p) {
+  struct worker_param_t *params = params_p;
   fprintf(stderr,"\033[sPlease wait a moment for statistics...");
   time_t start, current, elapsed;
-  uint64_t lloop = loop;
+  uint64_t lloop = globals.loop;
   start = time(NULL);
 
   for(;;) {
@@ -178,28 +192,29 @@ void *monitor_proc(void *unused) {
       sleep(1);
       current = time(NULL);
       elapsed = current - start;
-      if(elapsed>maxexectime || elapsed==maxexectime){
-        if(maxexectime > 0){
+      if(elapsed>globals.maxexectime || elapsed==globals.maxexectime){
+        if(globals.maxexectime > 0){
           error(X_MAXTIME_REACH);
         }
       }
     }
 
 
-    if(found)
+    if(globals.found)
       return 0;
 
-    pthread_mutex_lock(&count_mutex); // shouldn't be required here ?
+    pthread_mutex_lock(&globals.count_mutex); // shouldn't be required here ?
     current = time(NULL);
     elapsed = current - start;
 
     if(!elapsed)
       continue; // be paranoid and avoid divide-by-zero exceptions
 
-    lloop = loop;
-    pthread_mutex_unlock(&count_mutex);
+    lloop = globals.loop;
+    pthread_mutex_unlock(&globals.count_mutex);
     fprintf(stderr,"\033[u\033[KHashes: %-20"PRIu64"  Time: %-10d  Speed: %-"PRIu64"",
         lloop, (int)elapsed, lloop / elapsed);
+    if(params->keep_running) fprintf(stderr, "  Hits: %-5"PRIu64"", globals.hits);
 
   }
 

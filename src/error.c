@@ -9,6 +9,7 @@
 #include <openssl/err.h>
 
 // help - how to use this stuff
+//TODO: SHouldn't this move to print.c ?
 void usage(void) {
   printf("Usage: shallot [-dmopv] [-f <file>] [-t count] [-x time] [-e limit] pattern\n"
          "  -d        : Daemonize (requires -f)\n"
@@ -19,6 +20,8 @@ void usage(void) {
          "  -t count  : Forces exactly count threads to be spawned\n"
          "  -x secs   : Sets a limit on the maximum execution time. Has no effect without -m\n"
          "  -e limit  : Manually define the limit for e\n"
+         "  -k        : Keep running after found onion.\n"
+         "  -v        : Verbose. Use twice for more verbosity.\n"
          "Version: %s\n", VERSION);
   exit(X_WRONG_NUMARGS);
 }
@@ -51,7 +54,7 @@ void error(int32_t code) {
 
     case X_SGNL_INT_TERM: {
       fprintf(stderr, "\nCaught SIGINT/SIGTERM after %"PRIu64" tries - exiting.\n",
-              loop);
+          globals.loop);
       break;
     }
 

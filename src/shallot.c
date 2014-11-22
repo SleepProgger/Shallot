@@ -66,14 +66,20 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
     usage();
 
   // set up our initial values
-  uint8_t daemon = 0, optimum = 0;
+  uint8_t daemon = 0;
   uint32_t threads = 1, x = 1;
   char *file = 0;
-  elim = DEFAULT_E_LIMIT;
-  loop = 0;
-  found = 0;
-  monitor = 0;
-  pthread_mutex_init(&count_mutex, NULL );
+  globals.elim = DEFAULT_E_LIMIT;
+  globals.loop = 0;
+  globals.found = 0;
+  globals.monitor = 0;
+  globals.verbose = 0;
+  pthread_mutex_init(&globals.count_mutex, NULL );
+  pthread_mutex_init(&globals.print_mutex, NULL );
+  struct worker_param_t worker_param;
+  worker_param.keep_running = 0;
+  worker_param.optimum = 0;
+
 
   #ifdef BSD                                   // my
   int mib[2] = { CTL_HW, HW_NCPU };            // how
@@ -134,6 +140,7 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
     }
   }
 
+
   for(; x < argc - 1; x++) { // options parsing
     if(argv[x][0] != '-') {
       fprintf(stderr, "Error: Options must start with '-'\n");
@@ -143,16 +150,20 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
     for(; argv[x][y] != '\0'; y++) {
       uint8_t dbreak = 0;
       switch(argv[x][y]) {
+        case 'v': { // verbose
+          if(globals.verbose < 255) globals.verbose++;
+          break;
+        }
         case 'd': { // daemonize
           daemon = 1;
           break;
         }
         case 'm': { // monitor
-          monitor = 1;
+          globals.monitor = 1;
           break;
         }
         case 'o': { // prime optimization
-          optimum = 1;
+          worker_param.optimum = 1;
           break;
         }
         case 'f': { // file <file>
@@ -178,7 +189,7 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
             fprintf(stderr, "Error: -x format is '-x <max exec time in seconds>'\n");
             usage();
           }
-          maxexectime = strtoul(argv[x + 1], NULL, 0);
+          globals.maxexectime = strtoul(argv[x + 1], NULL, 0);
           dbreak = 1;
           break;
         }
@@ -188,10 +199,16 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
             fprintf(stderr, "Error: -e format is '-e limit'\n");
             usage();
           }
-          elim = strtoull(argv[x + 1], NULL, 0);
+          globals.elim = strtoull(argv[x + 1], NULL, 0);
           dbreak = 1;
           break;
         }
+
+        case 'k': {
+          worker_param.keep_running = 1;
+          break;
+        }
+
         default: { // unrecognized
           fprintf(stderr, "Error: Unrecognized option - '%c'\n", argv[x][y]);
           usage();
@@ -209,10 +226,10 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
   if(threads < 1)
     error(X_INVALID_THRDS);
 
-  if(monitor && file)
+  if(globals.monitor && file)
     error(X_EXCLUSIVE_OPT);
 
-  if(!(elim & 1) || (elim < RSA_PK_EXPONENT) || (elim > MAXIMUM_E_LIMIT))
+  if(!(globals.elim & 1) || (globals.elim < RSA_PK_EXPONENT) || (globals.elim > MAXIMUM_E_LIMIT))
     error(X_INVALID_E_LIM);
 
   if(daemon && !file)
@@ -228,7 +245,7 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
   if(regcomp(regex, pattern, REG_EXTENDED | REG_NOSUB))
     error(X_REGEX_COMPILE);
 
-  regex_str = pattern;
+  globals.regex_str = pattern;
   regfree(regex);
 
   if(file) {
@@ -274,21 +291,21 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
   // create our threads for 2+ cores
   for(x = 1; x < threads; x++) {
 
-    if(pthread_create(&thrd, NULL, worker, &optimum))
+    if(pthread_create(&thrd, NULL, worker, &worker_param))
       error(X_THREAD_CREATE);
   }
 
-  if(monitor) {
+  if(globals.monitor) {
     // TODO: when support is added for -mv, put a message here
-    if(pthread_create(&thrd, NULL, monitor_proc, NULL))
+    if(pthread_create(&thrd, NULL, monitor_proc, &worker_param))
       error(X_THREAD_CREATE);
   }
 
-  worker(&optimum); // use main thread for brute-forcing too
+  worker(&worker_param); // use main thread for brute-forcing too
 
-  if(pthread_self() != lucky_thread) { // be safe and avoid EDEADLK
+  if(pthread_self() != globals.lucky_thread) { // be safe and avoid EDEADLK
 
-    pthread_join(lucky_thread, NULL); // wait for the lucky thread to exit
+    pthread_join(globals.lucky_thread, NULL); // wait for the lucky thread to exit
   }
 
   return 0;

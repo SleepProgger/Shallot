@@ -43,9 +43,9 @@ void print_onion(char *onion) { // pretty-print hash
   char *s;
   #ifdef GENERIC
   s = malloc(PRINT_ONION_MAX);
-  snprintf(s, PRINT_ONION_MAX, PRINT_ONION_STR, loop, onion);
+  snprintf(s, PRINT_ONION_MAX, PRINT_ONION_STR, globals.loop, onion);
   #else
-  if (asprintf(&s, PRINT_ONION_STR, loop, onion) == -1)
+  if (asprintf(&s, PRINT_ONION_STR, globals.loop, onion) == -1)
 		error(X_OUT_OF_MEMORY);
   #endif
   for(i=0; i<strlen(s); i++)
