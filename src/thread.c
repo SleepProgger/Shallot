@@ -34,6 +34,13 @@ void *worker(void *params) { // life cycle of a cracking pthread
   RSA *rsa;
   uint64_t lloop = 0;
   regex_t *regex = malloc(REGEX_COMP_LMAX);
+#ifdef RECHECK_HASH
+  // use to check the own results as there as a bug leading to real onion addr != calculated one
+  uint8_t buf_c[SHA1_DIGEST_LEN], der_c[RSA_EXP_DER_LEN + 1];
+  uint8_t *ptr = der_c;
+  size_t der_len;
+#endif
+
   if(regcomp(regex, regex_str, REG_EXTENDED | REG_NOSUB)) // yes, this is redundant, but meh
     error(X_REGEX_COMPILE);
 
@@ -96,6 +103,22 @@ void *worker(void *params) { // life cycle of a cracking pthread
 
         if(!sane_key(rsa))        // check our key
           error(X_YOURE_UNLUCKY); // bad key :(
+
+#ifdef RECHECK_HASH
+          // Create the (unencoded) onion address from a fresh exported public key,
+          // and test it against out calculated one. Otherwise this tool produce wrong keys (rare).
+          // (Try code or caaa as test search pattern.)
+          der_len = i2d_RSAPublicKey(rsa, &ptr);
+          SHA1_Init(&copy);
+          SHA1_Update(&copy, der_c, der_len);
+          SHA1_Final(buf_c, &copy);
+          if (memcmp(buf, buf_c, 10) != 0) {
+            //RSA_free(rsa); // free up what's left (wtf ? why does this crash ? it should be freed ?!)
+            //base32_encode(onion_, 16, buf, 10);
+            fprintf(stderr, "\nInvalid key found %s. Skip this key.\n", onion);
+            break;
+          }
+#endif
 
         print_onion(onion); // print our domain
         print_prkey(rsa);   // and more importantly the key
