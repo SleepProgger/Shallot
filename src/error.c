@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <openssl/err.h>
 
 // help - how to use this stuff
 void usage(void) {
@@ -60,7 +61,7 @@ void error(int32_t code) {
     }
 
     case X_KEY_GEN_FAILS: {
-      fprintf(stderr, "ERROR: RSA Key Generation failed.  This is bad.\n");
+      fprintf(stderr, "ERROR: RSA Key Generation failed wit eCode %lu.  This is bad.\n", ERR_get_error());
       break;
     }
 
