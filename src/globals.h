@@ -13,7 +13,7 @@
 uint64_t loop, elim;
 uint8_t found, monitor, maxexectime;
 pthread_t lucky_thread;
-regex_t *regex;
+char *regex_str;
 
 pthread_mutex_t count_mutex;
 

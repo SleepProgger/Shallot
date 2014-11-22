@@ -33,6 +33,9 @@ void *worker(void *params) { // life cycle of a cracking pthread
   SHA_CTX hash, copy;
   RSA *rsa;
   uint64_t lloop = 0;
+  regex_t *regex = malloc(REGEX_COMP_LMAX);
+  if(regcomp(regex, regex_str, REG_EXTENDED | REG_NOSUB)) // yes, this is redundant, but meh
+    error(X_REGEX_COMPILE);
 
   while(!found) {
     // keys are only generated every so often
@@ -131,7 +134,7 @@ void *worker(void *params) { // life cycle of a cracking pthread
     }
     RSA_free(rsa);
   }
-
+  regfree(regex);
   return 0;
 }
 

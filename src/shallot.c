@@ -224,10 +224,12 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
   if(*pattern == '-')
     error(X_REGEX_INVALID);
 
-  regex = malloc(REGEX_COMP_LMAX);
-
+  regex_t *regex = malloc(REGEX_COMP_LMAX); // we already check it here
   if(regcomp(regex, pattern, REG_EXTENDED | REG_NOSUB))
     error(X_REGEX_COMPILE);
+
+  regex_str = pattern;
+  regfree(regex);
 
   if(file) {
     umask(077); // remove permissions to be safe
@@ -289,6 +291,5 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
     pthread_join(lucky_thread, NULL); // wait for the lucky thread to exit
   }
 
-  regfree(regex);
   return 0;
 }
