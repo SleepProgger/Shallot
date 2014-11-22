@@ -15,4 +15,6 @@ uint8_t found, monitor, maxexectime;
 pthread_t lucky_thread;
 regex_t *regex;
 
+pthread_mutex_t count_mutex;
+
 #endif

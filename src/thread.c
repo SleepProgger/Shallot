@@ -32,6 +32,7 @@ void *worker(void *params) { // life cycle of a cracking pthread
   char onion[BASE32_ONIONLEN + 1];
   SHA_CTX hash, copy;
   RSA *rsa;
+  uint64_t lloop = 0;
 
   while(!found) {
     // keys are only generated every so often
@@ -69,7 +70,14 @@ void *worker(void *params) { // life cycle of a cracking pthread
       SHA1_Final(buf, &copy);
 
       base32_onion(onion, buf); // base32-encode SHA1 digest
-      loop++;                   // keep track of our tries...
+
+      lloop++;                   // keep track of our tries...
+      if (lloop == 10000) { // to minimize the waiting for the mutex
+        pthread_mutex_lock(&count_mutex);
+        loop += lloop;
+        pthread_mutex_unlock(&count_mutex);
+        lloop = 0;
+      }
 
       if(!regexec(regex, onion, 0, 0, 0)) { // check for a match
 
@@ -129,7 +137,9 @@ void *worker(void *params) { // life cycle of a cracking pthread
 
 void *monitor_proc(void *unused) {
   fprintf(stderr,"\033[sPlease wait a moment for statistics...");
-  time_t start = time(NULL);
+  time_t start, current, elapsed;
+  uint64_t lloop = loop;
+  start = time(NULL);
 
   for(;;) {
     fflush(stderr); // make sure it gets printed
@@ -140,8 +150,8 @@ void *monitor_proc(void *unused) {
     //been reached.
     for(i=0;i<20;i++){
       sleep(1);
-      time_t current = time(NULL);
-      time_t elapsed = current - start;
+      current = time(NULL);
+      elapsed = current - start;
       if(elapsed>maxexectime || elapsed==maxexectime){
         if(maxexectime > 0){
           error(X_MAXTIME_REACH);
@@ -153,14 +163,17 @@ void *monitor_proc(void *unused) {
     if(found)
       return 0;
 
-    time_t current = time(NULL);
-    time_t elapsed = current - start;
+    pthread_mutex_lock(&count_mutex); // shouldn't be required here ?
+    current = time(NULL);
+    elapsed = current - start;
 
     if(!elapsed)
       continue; // be paranoid and avoid divide-by-zero exceptions
 
+    lloop = loop;
+    pthread_mutex_unlock(&count_mutex);
     fprintf(stderr,"\033[u\033[KHashes: %-20"PRIu64"  Time: %-10d  Speed: %-"PRIu64"",
-           loop, (int)elapsed, loop / elapsed);
+        lloop, (int)elapsed, lloop / elapsed);
 
   }
 

@@ -73,6 +73,7 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
   loop = 0;
   found = 0;
   monitor = 0;
+  pthread_mutex_init(&count_mutex, NULL );
 
   #ifdef BSD                                   // my
   int mib[2] = { CTL_HW, HW_NCPU };            // how
