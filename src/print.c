@@ -64,10 +64,11 @@ void print_prkey(RSA *rsa) { // print PEM formatted RSA key
   BIO_get_mem_ptr(b, &buf);
   (void)BIO_set_close(b, BIO_NOCLOSE);
   BIO_free(b);
-  char *dst = malloc(buf->length+1);
+  char *dst = malloc(buf->length+1); // why don't we just write buf->data to stdout  here ?
   strncpy(dst, buf->data, buf->length);
   dst[buf->length] = '\0';
   printf("%s", dst);
+  free(dst);
   BUF_MEM_free(buf);
 }
 
