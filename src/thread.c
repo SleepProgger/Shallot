@@ -32,7 +32,8 @@ void *worker(void *params_p) { // life cycle of a cracking pthread
   char onion[BASE32_ONIONLEN + 1];
   SHA_CTX hash, copy;
   RSA *rsa;
-  uint64_t lloop = 0;
+  char key_buf[2048]; // just to be sure
+  memset(key_buf, 0, 2048);
   regex_t *regex = malloc(REGEX_COMP_LMAX);
 #ifdef RECHECK_HASH
   // use to check the own results as there as a bug leading to real onion addr != calculated one
@@ -42,6 +43,8 @@ void *worker(void *params_p) { // life cycle of a cracking pthread
 #endif
   if(regcomp(regex, globals.regex_str, REG_EXTENDED | REG_NOSUB)) // yes, this is redundant, but meh
     error(X_REGEX_COMPILE);
+
+
 
   while(!globals.found) {
     // keys are only generated every so often
@@ -80,13 +83,7 @@ void *worker(void *params_p) { // life cycle of a cracking pthread
 
       base32_onion(onion, buf); // base32-encode SHA1 digest
 
-      lloop++;                   // keep track of our tries...
-      if (lloop == 10000) { // to minimize the waiting for the mutex
-        pthread_mutex_lock(&globals.count_mutex);
-        globals.loop += lloop;
-        pthread_mutex_unlock(&globals.count_mutex);
-        lloop = 0;
-      }
+      params->loops++;
 
       if(!regexec(regex, onion, 0, 0, 0)) { // check for a match
 
@@ -107,7 +104,7 @@ void *worker(void *params_p) { // life cycle of a cracking pthread
 #ifdef RECHECK_HASH
         // Create the (unencoded) onion address from a fresh exported public key,
         // and test it against out calculated one. Otherwise this tool produce wrong keys (rare).
-        // (Try ^code or ^caaa as test search pattern.)
+        // (Try ^code or ^caaa as test search pattern. (Don't forget -v[v] when testing.)
         ptr = der_c;
         der_len = i2d_RSAPublicKey(rsa, &ptr);
         SHA1_Init(&copy);
@@ -116,14 +113,19 @@ void *worker(void *params_p) { // life cycle of a cracking pthread
         if (memcmp(buf, buf_c, 10) != 0) {
           //RSA_free(rsa); // free up what's left (wtf ? why does this crash ? it should be freed ?!)
           //base32_encode(onion_, 16, buf, 10);
-          if(globals.verbose > 0) fprintf(stderr, "\nInvalid key found %s. Skip this key.\n", onion);
-          //TDODO: print failed key to stderr if verbose > 1
+          if(globals.verbose > 0) fprintf(stderr, "\nInvalid key found for %s. Skip this key.\n", onion);
+          if(globals.verbose > 1){
+            get_prkey(rsa, key_buf);
+            fprintf(stderr, "%s\n", key_buf);
+          }
           break;
         }
 #endif
+
+        get_prkey(rsa, key_buf);
         pthread_mutex_lock(&globals.print_mutex);
         print_onion(onion); // print our domain
-        print_prkey(rsa);   // and more importantly the key
+        fprintf(stdout, "%s\n", key_buf);   // and more importantly the key
         pthread_mutex_unlock(&globals.print_mutex);
 
         if(!params->keep_running){
@@ -178,13 +180,12 @@ void *monitor_proc(void *params_p) {
   struct worker_param_t *params = params_p;
   fprintf(stderr,"\033[sPlease wait a moment for statistics...");
   time_t start, current, elapsed;
-  uint64_t lloop = globals.loop;
+  uint64_t lloop = 0;
   start = time(NULL);
+  int i;
 
   for(;;) {
     fflush(stderr); // make sure it gets printed
-    int i = 0;
-
     //this next little section sleeps 20 seconds before continuing
     //and checks every second whether the maximum execution time (-x) has
     //been reached.
@@ -203,15 +204,15 @@ void *monitor_proc(void *params_p) {
     if(globals.found)
       return 0;
 
-    pthread_mutex_lock(&globals.count_mutex); // shouldn't be required here ?
+    // This is not 100% accurate, but good enough imho
     current = time(NULL);
     elapsed = current - start;
-
     if(!elapsed)
       continue; // be paranoid and avoid divide-by-zero exceptions
-
-    lloop = globals.loop;
-    pthread_mutex_unlock(&globals.count_mutex);
+    lloop = 0;
+    for (i = 0; i < globals.worker_n; ++i) {
+      lloop += globals.worker[i].loops;
+    }
     fprintf(stderr,"\033[u\033[KHashes: %-20"PRIu64"  Time: %-10d  Speed: %-"PRIu64"",
         lloop, (int)elapsed, lloop / elapsed);
     if(params->keep_running) fprintf(stderr, "  Hits: %-5"PRIu64"", globals.hits);

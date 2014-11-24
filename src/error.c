@@ -53,8 +53,10 @@ void error(int32_t code) {
     }
 
     case X_SGNL_INT_TERM: {
-      fprintf(stderr, "\nCaught SIGINT/SIGTERM after %"PRIu64" tries - exiting.\n",
-          globals.loop);
+      int i = 0;
+      uint64_t tmp = 0;
+      for (i = 0; i < globals.worker_n; tmp+=globals.worker[i].loops, ++i);
+      fprintf(stderr, "\nCaught SIGINT/SIGTERM after %"PRIu64" tries - exiting.\n", tmp);
       break;
     }
 

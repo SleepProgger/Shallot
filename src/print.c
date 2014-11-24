@@ -41,11 +41,14 @@ void base32_onion(char *dst, unsigned char *src) { // base32-encode hash
 void print_onion(char *onion) { // pretty-print hash
   uint8_t i;
   char *s;
+  int j = 0;
+  uint64_t loops = 0;
+  for (j = 0; j < globals.worker_n; loops+=globals.worker[j].loops, ++j);
   #ifdef GENERIC
   s = malloc(PRINT_ONION_MAX);
-  snprintf(s, PRINT_ONION_MAX, PRINT_ONION_STR, globals.loop, onion);
+  snprintf(s, PRINT_ONION_MAX, PRINT_ONION_STR, loops, onion);
   #else
-  if (asprintf(&s, PRINT_ONION_STR, globals.loop, onion) == -1)
+  if (asprintf(&s, PRINT_ONION_STR, loops, onion) == -1)
 		error(X_OUT_OF_MEMORY);
   #endif
   for(i=0; i<strlen(s); i++)
@@ -55,6 +58,19 @@ void print_onion(char *onion) { // pretty-print hash
     printf("-"); // TODO: use fputc()?
   printf("\n");
   free(s);
+}
+
+void get_prkey(RSA *rsa, char *buffer) { // print PEM formatted RSA key
+  BUF_MEM *buf;
+  BIO *b = BIO_new(BIO_s_mem());
+  PEM_write_bio_RSAPrivateKey(b, rsa, NULL, NULL, 0, NULL, NULL);
+  BIO_get_mem_ptr(b, &buf);
+  (void)BIO_set_close(b, BIO_NOCLOSE);
+  BIO_free(b);
+  //char *dst = malloc(buf->length+1); // why don't we just write buf->data to stdout  here ?
+  strncpy(buffer, buf->data, buf->length); // we trust the buffer is large enough here. TODO: test it ?
+  buffer[buf->length] = '\0';
+  BUF_MEM_free(buf);
 }
 
 void print_prkey(RSA *rsa) { // print PEM formatted RSA key

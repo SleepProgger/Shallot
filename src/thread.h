@@ -2,6 +2,7 @@
 #define THREAD_H
 
 struct worker_param_t{
+  uint64_t loops;
   uint8_t optimum;
   uint8_t keep_running;
 };

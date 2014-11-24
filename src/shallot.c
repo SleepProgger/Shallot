@@ -70,16 +70,14 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
   uint32_t threads = 1, x = 1;
   char *file = 0;
   globals.elim = DEFAULT_E_LIMIT;
-  globals.loop = 0;
   globals.found = 0;
   globals.monitor = 0;
   globals.verbose = 0;
-  pthread_mutex_init(&globals.count_mutex, NULL );
   pthread_mutex_init(&globals.print_mutex, NULL );
   struct worker_param_t worker_param;
   worker_param.keep_running = 0;
   worker_param.optimum = 0;
-
+  worker_param.loops = 0;
 
   #ifdef BSD                                   // my
   int mib[2] = { CTL_HW, HW_NCPU };            // how
@@ -241,7 +239,8 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
   if(*pattern == '-')
     error(X_REGEX_INVALID);
 
-  regex_t *regex = malloc(REGEX_COMP_LMAX); // we already check it here
+  regex_t *regex = malloc(REGEX_COMP_LMAX); // we already check it here and again in the threads atm...
+  // TODO: drop the check in threads ?
   if(regcomp(regex, pattern, REG_EXTENDED | REG_NOSUB))
     error(X_REGEX_COMPILE);
 
@@ -286,12 +285,17 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
 
   } else signal(SIGINT, terminate); // die on CTRL-C
 
-  pthread_t thrd;
+  if(globals.verbose > 1) fprintf(stderr, "Starting with: threads: %i, optimum: %s, verbose: %i, keep-running: %s  \n",
+      threads, worker_param.optimum?"true":"false", globals.verbose, worker_param.keep_running?"true":"false");
 
+  globals.worker_n = threads;
+  globals.worker = (struct worker_param_t*) malloc(sizeof(struct worker_param_t)*threads);
+
+  pthread_t thrd;
   // create our threads for 2+ cores
   for(x = 1; x < threads; x++) {
-
-    if(pthread_create(&thrd, NULL, worker, &worker_param))
+    memcpy(globals.worker+x, &worker_param, sizeof(struct worker_param_t));
+    if(pthread_create(&thrd, NULL, worker, globals.worker+x))
       error(X_THREAD_CREATE);
   }
 
@@ -301,7 +305,8 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
       error(X_THREAD_CREATE);
   }
 
-  worker(&worker_param); // use main thread for brute-forcing too
+  memcpy(globals.worker, &worker_param, sizeof(struct worker_param_t));
+  worker(globals.worker); // use main thread for brute-forcing too
 
   if(pthread_self() != globals.lucky_thread) { // be safe and avoid EDEADLK
 

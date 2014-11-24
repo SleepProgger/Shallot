@@ -1,0 +1,5 @@
+- Functions for different search styles.
+- Add sqlite3 support
+- Search for a faster sha1 impl.
+- Investigate GPU support
+- Investigate the wrong calculated onion problem ("fixed" by verifing "valid" keys for now)
