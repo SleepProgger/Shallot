@@ -5,6 +5,7 @@
 
 void base32_onion(char *dst, unsigned char *src);
 void print_onion(char *onion);
+void get_prkey(RSA *rsa, char *buffer);
 void print_prkey(RSA *rsa);
 
 #endif

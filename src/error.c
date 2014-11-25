@@ -9,12 +9,12 @@
 #include <openssl/err.h>
 
 // help - how to use this stuff
-//TODO: SHouldn't this move to print.c ?
+//TODO: Shouldn't this move to print.c ?
 void usage(void) {
-  printf("Usage: shallot [-dmopv] [-f <file>] [-t count] [-x time] [-e limit] pattern\n"
+  printf("Usage: shallot [-dmopvvr] [-c <check_type>] [-f <file>] [-t count] [-x time] [-e limit] pattern\n"
          "  -d        : Daemonize (requires -f)\n"
          "  -m        : Monitor mode (incompatible with -f)\n"
-	 "  -o        : Optimize RSA key size to improve SHA-1 hashing speed\n"
+         "  -o        : Optimize RSA key size to improve SHA-1 hashing speed\n"
          "  -p        : Print 'pattern' help and exit\n"
          "  -f <file> : Write output to <file>\n"
          "  -t count  : Forces exactly count threads to be spawned\n"
@@ -22,6 +22,12 @@ void usage(void) {
          "  -e limit  : Manually define the limit for e\n"
          "  -k        : Keep running after found onion.\n"
          "  -v        : Verbose. Use twice for more verbosity.\n"
+         "  -c <type> : Method to search for words. Can be one of 'r, s, e' .\n"
+         "            : (Regex, Start of address, End of address). Default is r.\n"
+         "  -h        : This help text.\n"
+         "  -r        : Disables the onion address verification. If disabled this tool\n"
+         "            : will return keys leading to onion addresses != the search pattern from time to time. \n"
+         "            : Better do not use this flag if you don't have another way of verfifying if the key is correct. \n"
          "Version: %s\n", VERSION);
   exit(X_WRONG_NUMARGS);
 }
@@ -82,6 +88,11 @@ void error(int32_t code) {
 
     case X_INVALID_THRDS: {
       fprintf(stderr, "ERROR: Invalid number of threads\n");
+      break;
+    }
+
+    case X_INVALID_PATTERN: {
+      fprintf(stderr, "ERROR: Invalid search pattern supplied. Must match [a-zA-Z2-7]{1,16}\n");
       break;
     }
 

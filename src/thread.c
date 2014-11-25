@@ -24,6 +24,19 @@
 #include <openssl/rsa.h>
 #include <openssl/sha.h>
 
+uint8_t find_regex(uint8_t *hash, char *onion_buf, struct worker_param_t *worker_data){
+  base32_onion(onion_buf, hash);
+  return regexec(worker_data->regex, onion_buf, 0, 0, 0) == 0;
+}
+uint8_t find_cmp_s(uint8_t *hash, char *onion_buf, struct worker_param_t *worker_data){
+  base32_onion(onion_buf, hash);
+  return memcmp(worker_data->word , onion_buf, worker_data->word_len) == 0;
+}
+uint8_t find_cmp_e(uint8_t *hash, char *onion_buf, struct worker_param_t *worker_data){
+  base32_onion(onion_buf, hash);
+  return memcmp(worker_data->word, onion_buf + 16 - worker_data->word_len, worker_data->word_len) == 0;
+}
+
 void *worker(void *params_p) { // life cycle of a cracking pthread
   struct worker_param_t *params = params_p;
   uint64_t e_be; // storage for our "big-endian" version of e
@@ -34,16 +47,16 @@ void *worker(void *params_p) { // life cycle of a cracking pthread
   RSA *rsa;
   char key_buf[2048]; // just to be sure
   memset(key_buf, 0, 2048);
-  regex_t *regex = malloc(REGEX_COMP_LMAX);
-#ifdef RECHECK_HASH
   // use to check the own results as there as a bug leading to real onion addr != calculated one
   uint8_t buf_c[SHA1_DIGEST_LEN], der_c[RSA_EXP_DER_LEN + 1];
   uint8_t *ptr = der_c;
   size_t der_len;
-#endif
-  if(regcomp(regex, globals.regex_str, REG_EXTENDED | REG_NOSUB)) // yes, this is redundant, but meh
-    error(X_REGEX_COMPILE);
-
+  if(globals.check_type == 'r'){
+    params->regex = malloc(REGEX_COMP_LMAX);
+    printf("compile regex with start worker with word %s\n", params->word);
+    if(regcomp(params->regex, globals.regex_str, REG_EXTENDED | REG_NOSUB)) // yes, this is redundant, but meh
+      error(X_REGEX_COMPILE);
+  }
 
 
   while(!globals.found) {
@@ -81,11 +94,11 @@ void *worker(void *params_p) { // life cycle of a cracking pthread
       SHA1_Update(&copy, e_ptr, e_bytes);
       SHA1_Final(buf, &copy);
 
-      base32_onion(onion, buf); // base32-encode SHA1 digest
+      //base32_onion(onion, buf); // base32-encode SHA1 digest
 
       params->loops++;
 
-      if(!regexec(regex, onion, 0, 0, 0)) { // check for a match
+      if(params->check_method(buf, onion, params)) { // check for a match
 
 
         if(globals.monitor)
@@ -101,26 +114,28 @@ void *worker(void *params_p) { // life cycle of a cracking pthread
           //error(X_YOURE_UNLUCKY); // bad key :(
         }
 
-#ifdef RECHECK_HASH
-        // Create the (unencoded) onion address from a fresh exported public key,
-        // and test it against out calculated one. Otherwise this tool produce wrong keys (rare).
-        // (Try ^code or ^caaa as test search pattern. (Don't forget -v[v] when testing.)
-        ptr = der_c;
-        der_len = i2d_RSAPublicKey(rsa, &ptr);
-        SHA1_Init(&copy);
-        SHA1_Update(&copy, der_c, der_len);
-        SHA1_Final(buf_c, &copy);
-        if (memcmp(buf, buf_c, 10) != 0) {
-          //RSA_free(rsa); // free up what's left (wtf ? why does this crash ? it should be freed ?!)
-          //base32_encode(onion_, 16, buf, 10);
-          if(globals.verbose > 0) fprintf(stderr, "\nInvalid key found for %s. Skip this key.\n", onion);
-          if(globals.verbose > 1){
-            get_prkey(rsa, key_buf);
-            fprintf(stderr, "%s\n", key_buf);
+        if(params->recheck_hash){
+          // Create the (unencoded) onion address from a fresh exported public key,
+          // and test it against out calculated one. Otherwise this tool produce wrong keys (rare).
+          // (Try ^code or ^caaa as test search pattern. (Don't forget -v[v] when testing.)
+          // TODO: comparing der should be enough (skip sha1 generation)
+          ptr = der_c;
+          der_len = i2d_RSAPublicKey(rsa, &ptr);
+          SHA1_Init(&copy);
+          SHA1_Update(&copy, der_c, der_len);
+          SHA1_Final(buf_c, &copy);
+          if (memcmp(buf, buf_c, 10) != 0) {
+            //RSA_free(rsa); // free up what's left (wtf ? why does this crash ? it should be freed ?!)
+            if(globals.verbose > 0) fprintf(stderr, "\nInvalid key found for %s. Skip this key.\n", onion);
+            if(globals.verbose > 1){
+              base32_onion(onion, buf_c);
+              fprintf(stderr, "Real onion is %s.onion\n", onion);
+              get_prkey(rsa, key_buf);
+              fprintf(stderr, "%s\n", key_buf);
+            }
+            break;
           }
-          break;
         }
-#endif
 
         get_prkey(rsa, key_buf);
         pthread_mutex_lock(&globals.print_mutex);
@@ -172,7 +187,7 @@ void *worker(void *params_p) { // life cycle of a cracking pthread
     }
     RSA_free(rsa);
   }
-  regfree(regex);
+  if(globals.check_type == 'r') regfree(params->regex);
   return 0;
 }
 

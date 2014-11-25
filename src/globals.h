@@ -21,6 +21,7 @@ struct globals_t{
 
   pthread_mutex_t print_mutex;
 
+  char check_type;
   struct worker_param_t *worker;
   int worker_n;
 };

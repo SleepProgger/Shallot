@@ -54,10 +54,26 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <ctype.h>
 
 void terminate(int signum) { // Ctrl-C/kill handler
   error(X_SGNL_INT_TERM);
 }
+
+
+// TODO: move somewhere else (print ?)
+// Validate part of an onion address.
+// If valid and lowercase is set the str will be all lowercase after this function.
+uint8_t valid_onion_part(char *str, int len, uint8_t lowercase){
+  if(len > 16) return 0;
+  int i;
+  for (i = 0; i < len; ++i) {
+    if(lowercase) str[i] = tolower(str[i]);
+    if( !((str[i] >= 'a' && str[i] <= 'z') || (str[i] >= '2' && str[i] <= '7'))) return 0;
+  }
+  return 1;
+}
+
 
 int main(int argc, char *argv[]) { // onions are fun, here we go
   signal(SIGTERM, terminate); // always let people kill
@@ -73,11 +89,14 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
   globals.found = 0;
   globals.monitor = 0;
   globals.verbose = 0;
+  globals.check_type = 'r';
   pthread_mutex_init(&globals.print_mutex, NULL );
   struct worker_param_t worker_param;
   worker_param.keep_running = 0;
   worker_param.optimum = 0;
   worker_param.loops = 0;
+  worker_param.check_method = find_regex;
+  worker_param.recheck_hash = 1;
 
   #ifdef BSD                                   // my
   int mib[2] = { CTL_HW, HW_NCPU };            // how
@@ -152,6 +171,14 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
           if(globals.verbose < 255) globals.verbose++;
           break;
         }
+        case 'r': { // recheck
+          worker_param.recheck_hash = 0;
+          break;
+        }
+        case 'h': { // verbose
+          usage();
+          break;
+        }
         case 'd': { // daemonize
           daemon = 1;
           break;
@@ -164,8 +191,12 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
           worker_param.optimum = 1;
           break;
         }
+        case 'k': {
+          worker_param.keep_running = 1;
+          break;
+        }
         case 'f': { // file <file>
-          if((argv[x][y + 1] != '\0') || (x + 1 > argc)) {
+          if((argv[x][y + 1] != '\0') || (x + 1 >= argc)) {
             fprintf(stderr, "Error: -f format is '-f <file>'\n");
             usage();
           }
@@ -174,8 +205,9 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
           break;
         }
         case 't': { // threads
-          if((argv[x][y + 1] != '\0') || (x + 1 > argc)) {
+          if((argv[x][y + 1] != '\0') || (x + 1 >= argc)) {
             fprintf(stderr, "Error: -t format is '-t threads'\n");
+            fflush(stderr);
             usage();
           }
           threads = strtoul(argv[x + 1], NULL, 0);
@@ -183,7 +215,7 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
           break;
         }
         case 'x': { // maximum execution time
-          if((argv[x][y + 1] != '\0') || (x + 1 > argc)) {
+          if((argv[x][y + 1] != '\0') || (x + 1 >= argc)) {
             fprintf(stderr, "Error: -x format is '-x <max exec time in seconds>'\n");
             usage();
           }
@@ -193,7 +225,7 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
         }
 
         case 'e': { // e limit
-          if((argv[x][y + 1] != '\0') || (x + 1 > argc)) {
+          if((argv[x][y + 1] != '\0') || (x + 1 >= argc)) {
             fprintf(stderr, "Error: -e format is '-e limit'\n");
             usage();
           }
@@ -202,8 +234,16 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
           break;
         }
 
-        case 'k': {
-          worker_param.keep_running = 1;
+        case 'c': { // check method
+          if((argv[x][y + 1] != '\0') || (x + 1 >= argc) || !(argv[x+1][0] == 'r' || argv[x+1][0] == 's' || argv[x+1][0] == 'e' )) {
+            fprintf(stderr, "Error: -c format is '-c <r,s,e>'\n");
+            usage();
+          }
+          if(argv[x+1][0] == 'r') worker_param.check_method = find_regex;
+          else if(argv[x+1][0] == 's') worker_param.check_method = find_cmp_s;
+          else if(argv[x+1][0] == 'e') worker_param.check_method = find_cmp_e;
+          globals.check_type = argv[x+1][0];
+          dbreak = 1;
           break;
         }
 
@@ -233,19 +273,24 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
   if(daemon && !file)
     error(X_NEED_FILE_OUT);
 
-  // compile regular expression from argument
+
   char *pattern = argv[argc - 1];
-
-  if(*pattern == '-')
-    error(X_REGEX_INVALID);
-
-  regex_t *regex = malloc(REGEX_COMP_LMAX); // we already check it here and again in the threads atm...
-  // TODO: drop the check in threads ?
-  if(regcomp(regex, pattern, REG_EXTENDED | REG_NOSUB))
-    error(X_REGEX_COMPILE);
-
-  globals.regex_str = pattern;
-  regfree(regex);
+  int pat_len = strlen(pattern);
+  if (globals.check_type == 'r'){
+    // compile regular expression from argument
+    if(*pattern == '-')
+      error(X_REGEX_INVALID);
+    regex_t *regex = malloc(REGEX_COMP_LMAX); // we already check it here and again in the threads atm...
+    // TODO: drop the check in threads ?
+    if(regcomp(regex, pattern, REG_EXTENDED | REG_NOSUB))
+      error(X_REGEX_COMPILE);
+    globals.regex_str = pattern; // TODO: move to worker_param ?
+    regfree(regex);
+  }else{
+    if(!valid_onion_part(pattern, pat_len, 1)) error(X_INVALID_PATTERN);
+    worker_param.word_len = pat_len;
+    worker_param.word = pattern;
+  }
 
   if(file) {
     umask(077); // remove permissions to be safe
@@ -285,12 +330,11 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
 
   } else signal(SIGINT, terminate); // die on CTRL-C
 
-  if(globals.verbose > 1) fprintf(stderr, "Starting with: threads: %i, optimum: %s, verbose: %i, keep-running: %s  \n",
-      threads, worker_param.optimum?"true":"false", globals.verbose, worker_param.keep_running?"true":"false");
+  if(globals.verbose > 1) fprintf(stderr, "Starting with: type: %c, threads: %i, optimum: %s, verbose: %i, keep-running: %s  \n",
+      globals.check_type, threads, worker_param.optimum?"true":"false", globals.verbose, worker_param.keep_running?"true":"false");
 
   globals.worker_n = threads;
   globals.worker = (struct worker_param_t*) malloc(sizeof(struct worker_param_t)*threads);
-
   pthread_t thrd;
   // create our threads for 2+ cores
   for(x = 1; x < threads; x++) {
@@ -298,14 +342,15 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
     if(pthread_create(&thrd, NULL, worker, globals.worker+x))
       error(X_THREAD_CREATE);
   }
+  memcpy(globals.worker, &worker_param, sizeof(struct worker_param_t));
 
   if(globals.monitor) {
     // TODO: when support is added for -mv, put a message here
+    // TODO: use own param for monitor thread
     if(pthread_create(&thrd, NULL, monitor_proc, &worker_param))
       error(X_THREAD_CREATE);
   }
 
-  memcpy(globals.worker, &worker_param, sizeof(struct worker_param_t));
   worker(globals.worker); // use main thread for brute-forcing too
 
   if(pthread_self() != globals.lucky_thread) { // be safe and avoid EDEADLK

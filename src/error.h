@@ -23,6 +23,8 @@
 #define X_OUT_OF_MEMORY 0x11
 #define X_MAXTIME_REACH 0x12
 
+#define X_INVALID_PATTERN 0x13
+
 
 #ifdef BSD
   // BSD specific defines

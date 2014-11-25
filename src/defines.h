@@ -32,8 +32,6 @@
 #define PRINT_ONION_STR "Found matching domain after %"PRIi64" tries: %s.onion"
 #define PRINT_ONION_MAX 79
 
-#define RECHECK_HASH
-
 #ifdef LINUX_PORT
   // Linux constants (lol no API)
   #define CPUINFO_BUF_SIZE 0x400
