@@ -5,7 +5,12 @@
 #include <stdint.h> // OpenBSD needs this included before sys/endian.h
 
 #if defined(LINUX_PORT) || defined(OSX) || defined(GENERIC)
-  #include "linux.h"
+	#if defined(WIN32)
+		#include <windows.h>
+		#define sleep(a) (Sleep((int)a*1000))
+	#else
+	  #include "linux.h"
+	#endif
 #else
   #include <sys/param.h> // OpenBSD needs this early on too
   #include <sys/endian.h>
@@ -23,6 +28,7 @@
 #include <pthread.h>
 #include <openssl/rsa.h>
 #include <openssl/sha.h>
+#include "endian.h"
 
 uint8_t find_regex(uint8_t *hash, char *onion_buf, struct worker_param_t *worker_data){
   base32_enc((uint8_t*)onion_buf, hash);
@@ -124,7 +130,7 @@ void *worker(void *params_p) { // life cycle of a cracking pthread
             //RSA_free(rsa); // free up what's left (wtf ? why does this crash ? it should be freed ?!)
             if(globals.verbose > 0) fprintf(stderr, "\nInvalid key found for %s. Skip this key.\n", onion);
             if(globals.verbose > 1){
-              base32_onion(onion, buf_c);
+            	base32_enc((uint8_t*)onion, buf_c);
               fprintf(stderr, "Real onion is %s.onion\n", onion);
               get_prkey(rsa, key_buf);
               fprintf(stderr, "%s\n", key_buf);

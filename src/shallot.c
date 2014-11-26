@@ -26,6 +26,7 @@
 /* TODO:
  * - finish all TODOs
  * - allow -m to be used with -f (use file for status output) [v0.0.3]
+ * from ../TODO import * ;)
  */
 
 #include "config.h"
@@ -49,6 +50,10 @@
 // BSD specific headers
 #include <sys/param.h> // needed on OpenBSD
 #include <sys/sysctl.h>
+#endif
+
+#ifdef WIN32
+#include <windows.h>
 #endif
 
 #include <signal.h>
@@ -301,7 +306,7 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
 			(freopen(file, "w", stderr) == NULL)
 		) error(X_FILE_OPEN_ERR);
   }
-
+#ifndef WIN32 // no -d flag for win for now
   if(daemon && (getppid() != 1)) { // daemonize if we should
     pid_t pid = fork();
 
@@ -327,8 +332,11 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
     signal(SIGTTOU, SIG_IGN);
     signal(SIGTTIN, SIG_IGN);
     signal(SIGHUP,  SIG_IGN);
-
   } else signal(SIGINT, terminate); // die on CTRL-C
+#else
+signal(SIGINT, terminate); // die on CTRL-C
+#endif
+
 
   if(globals.verbose > 1) fprintf(stderr, "Starting with: type: %c, threads: %i, optimum: %s, verbose: %i, keep-running: %s  \n",
       globals.check_type, threads, worker_param.optimum?"true":"false", globals.verbose, worker_param.keep_running?"true":"false");
@@ -353,10 +361,12 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
 
   worker(globals.worker); // use main thread for brute-forcing too
 
-  if(pthread_self() != globals.lucky_thread) { // be safe and avoid EDEADLK
 
-    pthread_join(globals.lucky_thread, NULL); // wait for the lucky thread to exit
+  // mingw uses a struct containing the pointer and additional data as pthread_t instead of a long.
+  // This way we should be on the safe side ?.
+  pthread_t tmp_ = pthread_self();
+  if(memcmp(&tmp_, &globals.lucky_thread, sizeof(pthread_t)) == 0){
+	  pthread_join(globals.lucky_thread, NULL); // wait for the lucky thread to exit
   }
-
   return 0;
 }

@@ -1,0 +1,11 @@
+To compile with mingw on windows (only tested win 7 so far),
+you will need the following libs:
+- openssl http://slproweb.com/products/Win32OpenSSL.html (link against libeay32)
+- pcre (for regex) http://gnuwin32.sourceforge.net/packages/pcre.htm
+Example:
+cd build
+gcc "-IG:\\pcre\\include" "-IG:\\OpenSSL-Win32\\include" -O3 -Wall -c -fmessage-length=0 -o "src\\shallot.o" "..\\src\\shallot.c" 
+gcc "-LG:\\pcre\\lib" "-LG:\\OpenSSL-Win32\\lib" -o Shallot_win.exe "src\\thread.o" "src\\shallot.o" "src\\print.o" "src\\math.o" "src\\error.o" -lpthread -llibeay32 -lpcre
+
+
+To build without mingw you will at least need a pthread port.

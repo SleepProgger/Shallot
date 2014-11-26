@@ -9,7 +9,7 @@
 
 // default values
 #define DEFAULT_THREADS 1 // not used on anything but unknown systems
-#define DEFAULT_E_LIMIT 0xFFFFFFFFFFull // must be odd and <= MAXIMUM_E_LIMIT 
+#define DEFAULT_E_LIMIT 0xFFFFFFFFFFull // must be odd and <= MAXIMUM_E_LIMIT
                                         // and >= RSA_PK_EXPONENT
 #define MAXIMUM_E_LIMIT 0xFFFFFFFFFFFFFFFDull
 

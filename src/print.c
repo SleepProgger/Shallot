@@ -15,8 +15,10 @@
 // for base32_onion which should be moved] {
 #include <stdint.h> // OpenBSD needs this included before sys/endian.h
 
-#if defined(LINUX_PORT) || defined(OSX) || defined(GENERIC)
+#if defined(LINUX_PORT) || defined(OSX) || defined(GENERIC) && !defined(WIN32)
   #include "linux.h"
+#elif defined(WIN32)
+// nothing ??
 #else
   #include <sys/param.h> // OpenBSD needs this early on too
   #include <sys/endian.h>
@@ -85,20 +87,20 @@ void base32_dec (uint8_t *dst, uint8_t *src)
   dst[9] = (tmp[14] << 5) |  tmp[15];
 }
 
-// TODO: Move to math.c?
-void base32_onion(char *dst, unsigned char *src) { // base32-encode hash
-  uint8_t byte = 0,   // dst location
-          offset = 0; // bit offset
-  for(; byte < BASE32_ONIONLEN; offset += 5) {
-    if(offset > 7) {
-      offset -= 8;
-      src++;
-    }
-    dst[byte++] = BASE32_ALPHABET[(htobe16(*(uint16_t*)src) >> (11-offset))
-                                  & (uint16_t)0x001F];
-  }
-  dst[byte] = '\0';
-}
+//// TODO: Move to math.c?
+//void base32_onion(char *dst, unsigned char *src) { // base32-encode hash
+//  uint8_t byte = 0,   // dst location
+//          offset = 0; // bit offset
+//  for(; byte < BASE32_ONIONLEN; offset += 5) {
+//    if(offset > 7) {
+//      offset -= 8;
+//      src++;
+//    }
+//    dst[byte++] = BASE32_ALPHABET[(htobe16(*(uint16_t*)src) >> (11-offset))
+//                                  & (uint16_t)0x001F];
+//  }
+//  dst[byte] = '\0';
+//}
 
 void print_onion(char *onion) { // pretty-print hash
   uint8_t i;
