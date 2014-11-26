@@ -7,5 +7,6 @@ cd build
 gcc "-IG:\\pcre\\include" "-IG:\\OpenSSL-Win32\\include" -O3 -Wall -c -fmessage-length=0 -o "src\\shallot.o" "..\\src\\shallot.c" 
 gcc "-LG:\\pcre\\lib" "-LG:\\OpenSSL-Win32\\lib" -o Shallot_win.exe "src\\thread.o" "src\\shallot.o" "src\\print.o" "src\\math.o" "src\\error.o" -lpthread -llibeay32 -lpcre
 
+You will need to define GENERIC (best to use config.h to define it)
 
 To build without mingw you will at least need a pthread port.

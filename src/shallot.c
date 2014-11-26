@@ -52,7 +52,7 @@
 #include <sys/sysctl.h>
 #endif
 
-#ifdef WIN32
+#ifdef __WINDOWS__
 #include <windows.h>
 #endif
 
@@ -102,6 +102,12 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
   worker_param.loops = 0;
   worker_param.check_method = find_regex;
   worker_param.recheck_hash = 1;
+  struct monitor_param_t monitor_param;
+#ifdef __WINDOWS__
+  monitor_param.linebreak = 1;
+#else
+  monitor_param.linebreak = 0;
+#endif
 
   #ifdef BSD                                   // my
   int mib[2] = { CTL_HW, HW_NCPU };            // how
@@ -192,6 +198,12 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
           globals.monitor = 1;
           break;
         }
+#ifndef __WINDOWS__
+        case 'l': { // add linebreak to monitor output
+          monitor_param.linebreak = 1;
+          break;
+        }
+#endif
         case 'o': { // prime optimization
           worker_param.optimum = 1;
           break;
@@ -306,7 +318,7 @@ int main(int argc, char *argv[]) { // onions are fun, here we go
 			(freopen(file, "w", stderr) == NULL)
 		) error(X_FILE_OPEN_ERR);
   }
-#ifndef WIN32 // no -d flag for win for now
+#ifndef __WINDOWS__ // no -d flag for win for now (TODO: investigate signals on win)
   if(daemon && (getppid() != 1)) { // daemonize if we should
     pid_t pid = fork();
 
@@ -354,8 +366,8 @@ signal(SIGINT, terminate); // die on CTRL-C
 
   if(globals.monitor) {
     // TODO: when support is added for -mv, put a message here
-    // TODO: use own param for monitor thread
-    if(pthread_create(&thrd, NULL, monitor_proc, &worker_param))
+    monitor_param.keep_running = worker_param.keep_running;
+    if(pthread_create(&thrd, NULL, monitor_proc, &monitor_param))
       error(X_THREAD_CREATE);
   }
 

@@ -14,6 +14,9 @@ void usage(void) {
   printf("Usage: shallot [-dmopvvr] [-c <check_type>] [-f <file>] [-t count] [-x time] [-e limit] pattern\n"
          "  -d        : Daemonize (requires -f)\n"
          "  -m        : Monitor mode (incompatible with -f)\n"
+#ifndef __WINDOWS__
+         "  -l        : Line break after status message instead of rewriting the line.\n"
+#endif
          "  -o        : Optimize RSA key size to improve SHA-1 hashing speed\n"
          "  -p        : Print 'pattern' help and exit\n"
          "  -f <file> : Write output to <file>\n"

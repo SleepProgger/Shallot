@@ -17,6 +17,11 @@ struct worker_param_t{
   int word_len;
 };
 
+struct monitor_param_t{
+  uint8_t linebreak;
+  uint8_t keep_running;
+};
+
 uint8_t find_regex(uint8_t *hash, char *onion_buf, struct worker_param_t *worker_data);
 uint8_t find_cmp_s(uint8_t *hash, char *onion_buf, struct worker_param_t *worker_data);
 uint8_t find_cmp_e(uint8_t *hash, char *onion_buf, struct worker_param_t *worker_data);

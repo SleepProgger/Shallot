@@ -5,9 +5,9 @@
 #include <stdint.h> // OpenBSD needs this included before sys/endian.h
 
 #if defined(LINUX_PORT) || defined(OSX) || defined(GENERIC)
-	#if defined(WIN32)
+	#if defined(__WINDOWS__)
 		#include <windows.h>
-		#define sleep(a) (Sleep((int)a*1000))
+		#define sleep(a) (Sleep((int)a*1000)) // should be enough ?.
 	#else
 	  #include "linux.h"
 	#endif
@@ -194,7 +194,7 @@ void *worker(void *params_p) { // life cycle of a cracking pthread
 }
 
 void *monitor_proc(void *params_p) {
-  struct worker_param_t *params = params_p;
+  struct monitor_param_t *params = params_p;
   fprintf(stderr,"\033[sPlease wait a moment for statistics...");
   time_t start, current, elapsed;
   uint64_t lloop = 0;
@@ -230,9 +230,12 @@ void *monitor_proc(void *params_p) {
     for (i = 0; i < globals.worker_n; ++i) {
       lloop += globals.worker[i].loops;
     }
-    fprintf(stderr,"\033[u\033[KHashes: %-20"PRIu64"  Time: %-10d  Speed: %-"PRIu64"",
+
+    if(! params->linebreak) fprintf(stderr,"\033[u\033[K");
+    fprintf(stderr,"Hashes: %-20"PRIu64"  Time: %-10d  Speed: %-"PRIu64"",
         lloop, (int)elapsed, lloop / elapsed);
     if(params->keep_running) fprintf(stderr, "  Hits: %-5"PRIu64"", globals.hits);
+    if(params->linebreak) fprintf(stderr,"\n");
 
   }
 

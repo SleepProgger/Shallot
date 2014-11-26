@@ -15,9 +15,9 @@
 // for base32_onion which should be moved] {
 #include <stdint.h> // OpenBSD needs this included before sys/endian.h
 
-#if defined(LINUX_PORT) || defined(OSX) || defined(GENERIC) && !defined(WIN32)
+#if defined(LINUX_PORT) || defined(OSX) || defined(GENERIC) && !defined(__WINDOWS__)
   #include "linux.h"
-#elif defined(WIN32)
+#elif defined(__WINDOWS__)
 // nothing ??
 #else
   #include <sys/param.h> // OpenBSD needs this early on too

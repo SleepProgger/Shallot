@@ -4,6 +4,11 @@
 #include "config.h"
 #include <inttypes.h>
 
+// TODO: move to config.h (configure on win ??) ?
+#if (defined(_WIN16) || defined(_WIN32) || defined(_WIN64)) && !defined(__WINDOWS__)
+# define __WINDOWS__
+#endif
+
 // our ever-important version string
 #define VERSION "0.0.3-alpha"
 
