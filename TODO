@@ -1,7 +1,9 @@
-- Find error with -o or remove ? (Always results in invalid onion address for me (calculated onion != real onion))
-- Support more filter (as OR or as AND) .. think about it 
+- wordlist prefix and postfix
 - Move regex_str to worker_param
 - Add sqlite3 support
+- Find error with -o or remove ? (Always results in invalid onion address for me (calculated onion != real onion))
+- Support more filter (as OR or as AND) .. think about it
+-    
 - Search for a faster sha1 impl.
 - Investigate GPU support
 - Investigate the wrong calculated onion problem ("fixed" by verifing "valid" keys for now)

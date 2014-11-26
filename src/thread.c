@@ -25,15 +25,15 @@
 #include <openssl/sha.h>
 
 uint8_t find_regex(uint8_t *hash, char *onion_buf, struct worker_param_t *worker_data){
-  base32_onion(onion_buf, hash);
+  base32_enc((uint8_t*)onion_buf, hash);
   return regexec(worker_data->regex, onion_buf, 0, 0, 0) == 0;
 }
 uint8_t find_cmp_s(uint8_t *hash, char *onion_buf, struct worker_param_t *worker_data){
-  base32_onion(onion_buf, hash);
+  base32_enc((uint8_t*)onion_buf, hash);
   return memcmp(worker_data->word , onion_buf, worker_data->word_len) == 0;
 }
 uint8_t find_cmp_e(uint8_t *hash, char *onion_buf, struct worker_param_t *worker_data){
-  base32_onion(onion_buf, hash);
+  base32_enc((uint8_t*)onion_buf, hash);
   return memcmp(worker_data->word, onion_buf + 16 - worker_data->word_len, worker_data->word_len) == 0;
 }
 
@@ -94,12 +94,8 @@ void *worker(void *params_p) { // life cycle of a cracking pthread
       SHA1_Update(&copy, e_ptr, e_bytes);
       SHA1_Final(buf, &copy);
 
-      //base32_onion(onion, buf); // base32-encode SHA1 digest
-
       params->loops++;
-
       if(params->check_method(buf, onion, params)) { // check for a match
-
 
         if(globals.monitor)
           printf("\n"); // keep our printing pretty!

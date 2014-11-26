@@ -21,7 +21,69 @@
   #include <sys/param.h> // OpenBSD needs this early on too
   #include <sys/endian.h>
 #endif
-// }
+//}
+
+/* From Eschalot src- Only remaining src i found is: https://bitcointalk.org/index.php?topic=639410.0
+ * Base32 encode 10 byte long 'src' into 16 character long 'dst' */
+/* Experimental, unroll everything. So far, it seems to be the fastest of the
+ * algorithms that I've tried. TODO: review and decide if it's final.*/
+void base32_enc (uint8_t *dst, uint8_t *src)
+{
+  dst[ 0] = BASE32_ALPHABET[ (src[0] >> 3)          ];
+  dst[ 1] = BASE32_ALPHABET[((src[0] << 2) | (src[1] >> 6)) & 31];
+  dst[ 2] = BASE32_ALPHABET[ (src[1] >> 1)      & 31];
+  dst[ 3] = BASE32_ALPHABET[((src[1] << 4) | (src[2] >> 4)) & 31];
+  dst[ 4] = BASE32_ALPHABET[((src[2] << 1) | (src[3] >> 7)) & 31];
+  dst[ 5] = BASE32_ALPHABET[ (src[3] >> 2)      & 31];
+  dst[ 6] = BASE32_ALPHABET[((src[3] << 3) | (src[4] >> 5)) & 31];
+  dst[ 7] = BASE32_ALPHABET[  src[4]        & 31];
+
+  dst[ 8] = BASE32_ALPHABET[ (src[5] >> 3)          ];
+  dst[ 9] = BASE32_ALPHABET[((src[5] << 2) | (src[6] >> 6)) & 31];
+  dst[10] = BASE32_ALPHABET[ (src[6] >> 1)      & 31];
+  dst[11] = BASE32_ALPHABET[((src[6] << 4) | (src[7] >> 4)) & 31];
+  dst[12] = BASE32_ALPHABET[((src[7] << 1) | (src[8] >> 7)) & 31];
+  dst[13] = BASE32_ALPHABET[ (src[8] >> 2)      & 31];
+  dst[14] = BASE32_ALPHABET[((src[8] << 3) | (src[9] >> 5)) & 31];
+  dst[15] = BASE32_ALPHABET[  src[9]        & 31];
+
+  dst[16] = '\0';
+}
+
+/* From Eschalot src- Only remaining src i found is: https://bitcointalk.org/index.php?topic=639410.0
+ * Decode base32 16 character long 'src' into 10 byte long 'dst'. */
+/* TODO: Revisit and review, would like to shrink it down a bit.
+ * However, it has to stay endian-safe and be fast. */
+void base32_dec (uint8_t *dst, uint8_t *src)
+{
+  uint8_t   tmp[BASE32_ONIONLEN];
+  unsigned int  i;
+
+  for (i = 0; i < 16; i++) {
+    if (src[i] >= 'a' && src[i] <= 'z') {
+      tmp[i] = src[i] - 'a';
+    } else {
+      if (src[i] >= '2' && src[i] <= '7')
+        tmp[i] = src[i] - '1' + ('z' - 'a');
+      else {
+        /* Bad character detected.
+         * This should not happen, but just in case
+         * we will replace it with 'z' character. */
+        tmp[i] = 26;
+      }
+    }
+  }
+  dst[0] = (tmp[ 0] << 3) | (tmp[1] >> 2);
+  dst[1] = (tmp[ 1] << 6) | (tmp[2] << 1) | (tmp[3] >> 4);
+  dst[2] = (tmp[ 3] << 4) | (tmp[4] >> 1);
+  dst[3] = (tmp[ 4] << 7) | (tmp[5] << 2) | (tmp[6] >> 3);
+  dst[4] = (tmp[ 6] << 5) |  tmp[7];
+  dst[5] = (tmp[ 8] << 3) | (tmp[9] >> 2);
+  dst[6] = (tmp[ 9] << 6) | (tmp[10] << 1) | (tmp[11] >> 4);
+  dst[7] = (tmp[11] << 4) | (tmp[12] >> 1);
+  dst[8] = (tmp[12] << 7) | (tmp[13] << 2) | (tmp[14] >> 3);
+  dst[9] = (tmp[14] << 5) |  tmp[15];
+}
 
 // TODO: Move to math.c?
 void base32_onion(char *dst, unsigned char *src) { // base32-encode hash
